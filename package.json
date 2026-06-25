@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "build:check": "tsc --noEmit"
+    "build:check": "tsc --noEmit",
+    "pack": "node scripts/build.mjs && node scripts/pack.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",
