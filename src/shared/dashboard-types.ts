@@ -12,8 +12,6 @@ export interface FollowingDetail {
   friendsCount: number; // Number of accounts this user follows
   followersCount: number; // Number of followers this user has
   lastTweetTime: string | null; // ISO 8601 timestamp of most recent tweet
-  accountAnalysis: string | null; // Grok AI analysis result text
-  analysisStatus: 'pending' | 'done' | 'failed'; // Analysis state
   fetchedAt: number; // Timestamp when detail was fetched
 }
 
@@ -40,14 +38,6 @@ export interface DashboardProgress {
 }
 
 /**
- * Progress information for Grok AI analysis
- */
-export interface GrokProgress {
-  analyzed: number;
-  total: number;
-}
-
-/**
  * Error information displayed in dashboard
  */
 export interface DashboardError {
@@ -66,7 +56,6 @@ export interface DashboardState {
   sortOrder: 'asc' | 'desc';
   searchQuery: string;
   fetchProgress: DashboardProgress | null;
-  grokProgress: GrokProgress | null;
   error: DashboardError | null;
   lastUpdatedAt: number | null;
 }

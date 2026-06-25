@@ -434,8 +434,6 @@ export class DashboardAPIClient {
       friendsCount: legacy.friends_count ?? 0,
       followersCount: legacy.followers_count ?? 0,
       lastTweetTime,
-      accountAnalysis: null,
-      analysisStatus: 'pending',
       fetchedAt: Date.now(),
     };
   }

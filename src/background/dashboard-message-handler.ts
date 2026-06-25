@@ -1,18 +1,15 @@
 // Dashboard message handler for routing messages between Dashboard page and background services
 
 import type { AuthCredentials } from '../shared/types';
-import type { FollowingDetail } from '../shared/dashboard-types';
 import {
   DashboardMessageType,
   type DashboardFetchPayload,
   type DashboardProgressPayload,
   type DashboardCompletePayload,
   type DashboardErrorPayload,
-  type GrokAnalyzeResultPayload,
   type UnfollowResultPayload,
 } from '../shared/dashboard-messages';
 import { DashboardAPIClient } from './dashboard-api-client';
-import { GrokClient } from './grok-client';
 
 /**
  * Incoming message structure from Dashboard page or content scripts
@@ -24,22 +21,15 @@ interface DashboardMessage {
 
 /**
  * DashboardMessageHandler routes messages from the Dashboard page
- * to the appropriate API clients (DashboardAPIClient, GrokClient)
- * and sends progress/completion/error responses back to the sender tab.
+ * to the DashboardAPIClient and sends progress/completion/error responses back.
  */
 export class DashboardMessageHandler {
   private dashboardApiClient: DashboardAPIClient;
-  private grokClient: GrokClient;
   private credentials: AuthCredentials;
-
-  // Track Grok analysis state
-  private grokRunning: boolean = false;
-  private grokAborted: boolean = false;
 
   constructor(credentials: AuthCredentials) {
     this.credentials = credentials;
     this.dashboardApiClient = new DashboardAPIClient(credentials);
-    this.grokClient = new GrokClient();
   }
 
   /**
@@ -85,25 +75,11 @@ export class DashboardMessageHandler {
         this.handleFetchLastTweet(message.payload as { userId: string }, _sendResponse);
         return true;
 
-      case DashboardMessageType.GROK_ANALYZE_START:
-        console.log(`[X-Dashboard] Received GROK_ANALYZE_START, tabId=${tabId}, users=${(message.payload as any)?.users?.length}`);
-        if (tabId != null) {
-          this.handleGrokStart(message.payload as { users: FollowingDetail[] }, tabId);
-        } else {
-          console.warn('[X-Dashboard] GROK_ANALYZE_START: no tabId from sender');
-        }
-        return true;
-
-      case DashboardMessageType.GROK_ANALYZE_STOP:
-        this.handleGrokStop();
-        return true;
-
       case DashboardMessageType.OPEN_DASHBOARD:
         this.handleOpenDashboard();
         return true;
 
       default:
-        // Not a dashboard message, don't handle it
         return false;
     }
   }
@@ -147,7 +123,6 @@ export class DashboardMessageHandler {
 
   /**
    * Handle incremental update: fetch latest following list and stream progress.
-   * Same flow as fetch all, but intended for delta updates from the Dashboard page.
    */
   private async handleIncrementalUpdate(
     payload: DashboardFetchPayload,
@@ -216,63 +191,6 @@ export class DashboardMessageHandler {
   }
 
   /**
-   * Start sequential Grok analysis for a list of users.
-   * Sends GROK_ANALYZE_RESULT for each user as analysis completes.
-   * Respects grokAborted flag to allow stopping mid-sequence.
-   */
-  private async handleGrokStart(
-    payload: { users: FollowingDetail[] },
-    tabId: number
-  ): Promise<void> {
-    // Prevent multiple concurrent Grok analysis runs
-    if (this.grokRunning) {
-      console.log('[X-Dashboard] Grok already running, skipping');
-      return;
-    }
-
-    this.grokRunning = true;
-    this.grokAborted = false;
-
-    const users = payload.users || [];
-    console.log(`[X-Dashboard] Starting Grok analysis for ${users.length} users, tabId=${tabId}`);
-
-    for (let i = 0; i < users.length; i++) {
-      // Check if analysis was stopped
-      if (this.grokAborted) {
-        break;
-      }
-
-      const user = users[i];
-      const result = await this.grokClient.analyzeUser(user.username, this.credentials);
-
-      // Check again after async call in case stop was requested during analysis
-      if (this.grokAborted) {
-        break;
-      }
-
-      const resultPayload: GrokAnalyzeResultPayload = {
-        userId: user.userId,
-        analysis: result.content,
-        status: result.success ? 'done' : 'failed',
-      };
-
-      this.sendToTab(tabId, {
-        type: DashboardMessageType.GROK_ANALYZE_RESULT,
-        payload: resultPayload,
-      });
-    }
-
-    this.grokRunning = false;
-  }
-
-  /**
-   * Stop the ongoing Grok analysis loop.
-   */
-  private handleGrokStop(): void {
-    this.grokAborted = true;
-  }
-
-  /**
    * Fetch the last tweet time for a single user and respond directly via sendResponse.
    */
   private async handleFetchLastTweet(
@@ -296,59 +214,29 @@ export class DashboardMessageHandler {
   }
 
   /**
-   * Send a message to a specific tab. Silently ignores errors
-   * (e.g., tab closed before message arrives).
+   * Send a message to a specific tab. Silently ignores errors.
    */
   private sendToTab(tabId: number, message: any): void {
-    chrome.tabs.sendMessage(tabId, message).catch(() => {
-      // Tab may have been closed; ignore send failures
-    });
+    chrome.tabs.sendMessage(tabId, message).catch(() => {});
   }
 
   /**
    * Build a DashboardErrorPayload from an unknown error.
-   * Classifies errors by type: auth_expired (401), rate_limit (429), network, or unknown.
    */
   private buildErrorPayload(error: unknown): DashboardErrorPayload {
     if (error instanceof Error) {
       const message = error.message;
-
-      // Detect HTTP status codes from error messages
       if (message.includes('401') || message.toLowerCase().includes('auth')) {
-        return {
-          errorType: 'auth_expired',
-          message: 'Authentication expired. Please refresh the X page and try again.',
-        };
+        return { errorType: 'auth_expired', message: 'Authentication expired. Please refresh the X page.' };
       }
-
       if (message.includes('429') || message.toLowerCase().includes('rate limit')) {
-        return {
-          errorType: 'rate_limit',
-          message: 'Rate limited by X API. Please wait and try again later.',
-        };
+        return { errorType: 'rate_limit', message: 'Rate limited. Please wait and try again.' };
       }
-
-      if (
-        message.toLowerCase().includes('network') ||
-        message.toLowerCase().includes('fetch') ||
-        message.toLowerCase().includes('timeout') ||
-        message.toLowerCase().includes('abort')
-      ) {
-        return {
-          errorType: 'network',
-          message: 'Network error occurred. Please check your connection and try again.',
-        };
+      if (message.toLowerCase().includes('network') || message.toLowerCase().includes('fetch') || message.toLowerCase().includes('timeout')) {
+        return { errorType: 'network', message: 'Network error. Please check your connection.' };
       }
-
-      return {
-        errorType: 'unknown',
-        message: message || 'An unexpected error occurred.',
-      };
+      return { errorType: 'unknown', message: message || 'An unexpected error occurred.' };
     }
-
-    return {
-      errorType: 'unknown',
-      message: 'An unexpected error occurred.',
-    };
+    return { errorType: 'unknown', message: 'An unexpected error occurred.' };
   }
 }

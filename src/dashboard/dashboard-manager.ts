@@ -50,7 +50,6 @@ export class DashboardManager {
       sortOrder: 'desc',
       searchQuery: '',
       fetchProgress: null,
-      grokProgress: null,
       error: null,
       lastUpdatedAt: null,
     };

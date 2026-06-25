@@ -11,15 +11,11 @@ export enum DashboardMessageType {
   DASHBOARD_INCREMENTAL_UPDATE = 'DASHBOARD_INCREMENTAL_UPDATE',
   DASHBOARD_UNFOLLOW = 'DASHBOARD_UNFOLLOW',
   DASHBOARD_FETCH_LAST_TWEET = 'DASHBOARD_FETCH_LAST_TWEET',
-  GROK_ANALYZE_START = 'GROK_ANALYZE_START',
-  GROK_ANALYZE_STOP = 'GROK_ANALYZE_STOP',
 
   // Background -> Dashboard
   DASHBOARD_PROGRESS = 'DASHBOARD_PROGRESS',
   DASHBOARD_COMPLETE = 'DASHBOARD_COMPLETE',
   DASHBOARD_ERROR = 'DASHBOARD_ERROR',
-  DASHBOARD_USER_DETAIL = 'DASHBOARD_USER_DETAIL',
-  GROK_ANALYZE_RESULT = 'GROK_ANALYZE_RESULT',
   UNFOLLOW_RESULT = 'UNFOLLOW_RESULT',
 
   // Content Script -> Background
@@ -57,15 +53,6 @@ export interface DashboardErrorPayload {
   errorType: 'rate_limit' | 'network' | 'auth_expired' | 'unknown';
   message: string;
   partialData?: FollowingDetail[];
-}
-
-/**
- * Payload for GROK_ANALYZE_RESULT messages
- */
-export interface GrokAnalyzeResultPayload {
-  userId: string;
-  analysis: string | null;
-  status: 'done' | 'failed';
 }
 
 /**
