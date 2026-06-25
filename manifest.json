@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "X Unfollowed",
+  "description": "检查 X (Twitter) 上未回关你的用户",
+  "version": "1.0.0",
+  "permissions": [
+    "storage",
+    "cookies"
+  ],
+  "host_permissions": [
+    "*://x.com/*",
+    "*://api.x.com/*"
+  ],
+  "background": {
+    "service_worker": "dist/background/index.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://x.com/*"],
+      "js": ["dist/content/index.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

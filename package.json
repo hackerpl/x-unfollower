@@ -1,0 +1,16 @@
+{
+  "name": "x-unfollowed",
+  "version": "1.0.0",
+  "description": "X (Twitter) 未回关用户检查器 Chrome 扩展",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.4.0"
+  }
+}
