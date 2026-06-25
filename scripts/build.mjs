@@ -2,7 +2,7 @@
 // Bundles background (ESM for service worker) and content (IIFE for content script)
 
 import * as esbuild from 'esbuild';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, copyFileSync } from 'fs';
 
 const outdir = 'dist';
 
@@ -37,6 +37,22 @@ async function build() {
     format: 'iife',
     platform: 'browser',
   });
+
+  // Bundle dashboard page as IIFE
+  await esbuild.build({
+    ...commonOptions,
+    entryPoints: ['src/dashboard/index.ts'],
+    outfile: 'dist/dashboard/index.js',
+    format: 'iife',
+    platform: 'browser',
+  });
+
+  // Copy dashboard HTML to dist
+  const dashboardDistDir = 'dist/dashboard';
+  if (!existsSync(dashboardDistDir)) {
+    mkdirSync(dashboardDistDir, { recursive: true });
+  }
+  copyFileSync('src/dashboard/index.html', 'dist/dashboard/index.html');
 
   console.log('Build completed successfully!');
 }

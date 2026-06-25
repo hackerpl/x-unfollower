@@ -5,6 +5,7 @@ import type { ThemeInfo } from './theme-detector';
 import type { UserInfo } from '../shared/types';
 import type { ProgressPayload, ErrorPayload } from '../shared/messages';
 import { getStrings, detectLocale, type I18nStrings } from '../shared/i18n';
+import { DashboardMessageType } from '../shared/dashboard-messages';
 
 /**
  * Sidebar state used by UIRenderer to determine what to render
@@ -136,7 +137,7 @@ export class UIRenderer {
   }
 
   /**
-   * Render header with title and refresh button.
+   * Render header with title, dashboard button, and refresh button.
    * Uses X's native padding/font style classes.
    */
   private renderHeader(state: SidebarState): HTMLElement {
@@ -146,6 +147,22 @@ export class UIRenderer {
     const title = document.createElement('span');
     title.style.cssText = 'font-size:20px;font-weight:800;line-height:24px;';
     title.textContent = this.strings.title;
+
+    // Dashboard entry button - opens the following dashboard in a new tab
+    const dashboardBtn = document.createElement('div');
+    dashboardBtn.style.cssText = 'width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;cursor:pointer;transition:background-color 0.2s;font-size:16px;';
+    dashboardBtn.textContent = '📊';
+    dashboardBtn.title = 'Dashboard';
+    dashboardBtn.addEventListener('click', (e: MouseEvent) => {
+      // Support modifier keys: Ctrl/Cmd+click opens directly via window.open
+      if (e.ctrlKey || e.metaKey) {
+        window.open(chrome.runtime.getURL('dist/dashboard/index.html'), '_blank');
+      } else {
+        chrome.runtime.sendMessage({ type: DashboardMessageType.OPEN_DASHBOARD });
+      }
+    });
+    dashboardBtn.addEventListener('mouseenter', () => { dashboardBtn.style.backgroundColor = 'rgba(255,255,255,0.1)'; });
+    dashboardBtn.addEventListener('mouseleave', () => { dashboardBtn.style.backgroundColor = ''; });
 
     const refreshBtn = document.createElement('div');
     refreshBtn.style.cssText = 'width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;cursor:pointer;transition:background-color 0.2s;font-size:18px;';
@@ -161,8 +178,14 @@ export class UIRenderer {
       refreshBtn.addEventListener('mouseleave', () => { refreshBtn.style.backgroundColor = ''; });
     }
 
+    // Button container for dashboard and refresh buttons
+    const btnGroup = document.createElement('div');
+    btnGroup.style.cssText = 'display:flex;align-items:center;gap:4px;';
+    btnGroup.appendChild(dashboardBtn);
+    btnGroup.appendChild(refreshBtn);
+
     header.appendChild(title);
-    header.appendChild(refreshBtn);
+    header.appendChild(btnGroup);
     return header;
   }
 

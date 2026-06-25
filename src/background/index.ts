@@ -4,9 +4,11 @@
 import { APIClient, APIError } from './api-client';
 import { calculateNonFollowers } from './data-processor';
 import { MessageHub } from './message-hub';
+import { DashboardMessageHandler } from './dashboard-message-handler';
 import type { FetchProgress, UserInfo, AuthCredentials } from '../shared/types';
 import { MessageType } from '../shared/messages';
 import type { ErrorPayload } from '../shared/messages';
+import { DashboardMessageType } from '../shared/dashboard-messages';
 import { MAX_RETRIES } from '../shared/constants';
 
 /**
@@ -268,5 +270,38 @@ chrome.runtime.onMessage.addListener(
     ) {
       cachedUserId = message.payload.userId;
     }
+  }
+);
+
+// --- Initialize DashboardMessageHandler ---
+
+// Create handler with dummy credentials; will be refreshed before each message
+const dashboardMessageHandler = new DashboardMessageHandler({
+  bearerToken: X_BEARER_TOKEN,
+  csrfToken: '',
+  extractedAt: 0,
+});
+
+// Listen for Dashboard-related messages and route them to DashboardMessageHandler
+chrome.runtime.onMessage.addListener(
+  (message, sender, sendResponse) => {
+    // Only handle messages with Dashboard-related types
+    const dashboardTypes = Object.values(DashboardMessageType) as string[];
+    if (!message.type || !dashboardTypes.includes(message.type)) {
+      return false;
+    }
+
+    console.log(`[X-Dashboard] Routing message: ${message.type}, sender.tab.id=${sender.tab?.id}`);
+
+    // Refresh credentials and delegate to the handler
+    getCredentials().then((credentials) => {
+      if (credentials) {
+        dashboardMessageHandler.setCredentials(credentials);
+      }
+      dashboardMessageHandler.handleMessage(message, sender, sendResponse);
+    });
+
+    // Return true to keep the sendResponse channel open for async handling
+    return true;
   }
 );

@@ -7,11 +7,14 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:check": "tsc --noEmit",
-    "pack": "node scripts/build.mjs && node scripts/pack.mjs"
+    "pack": "node scripts/build.mjs && node scripts/pack.mjs",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",
     "esbuild": "^0.28.1",
-    "typescript": "^5.4.0"
+    "fast-check": "^4.8.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.9"
   }
 }
