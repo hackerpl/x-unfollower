@@ -4,6 +4,7 @@
 import type { ThemeInfo } from './theme-detector';
 import type { UserInfo } from '../shared/types';
 import type { ProgressPayload, ErrorPayload } from '../shared/messages';
+import { getStrings, detectLocale, type I18nStrings } from '../shared/i18n';
 
 /**
  * Sidebar state used by UIRenderer to determine what to render
@@ -24,8 +25,11 @@ export interface SidebarState {
  * Format progress text for display during data fetching.
  */
 export function formatProgress(payload: ProgressPayload): string {
-  const typeLabel = payload.type === 'following' ? '关注列表' : '粉丝列表';
-  return `正在获取${typeLabel} 第${payload.currentPage}页 (已获取${payload.totalUsers}人)...`;
+  const strings = getStrings();
+  if (payload.type === 'following') {
+    return strings.loadingFollowing(payload.currentPage, payload.totalUsers);
+  }
+  return strings.loadingFollowers(payload.currentPage, payload.totalUsers);
 }
 
 /**
@@ -36,21 +40,22 @@ export function buildProfileUrl(username: string): string {
 }
 
 /**
- * Map errorType to Chinese description text.
+ * Map errorType to localized description text.
  */
 export function renderErrorMessage(error: ErrorPayload): string {
+  const strings = getStrings();
   switch (error.errorType) {
     case 'rate_limit':
-      return '请求频率超限，请稍后再试';
+      return strings.errorRateLimit;
     case 'network':
-      return '网络连接失败，请检查网络后重试';
+      return strings.errorNetwork;
     case 'parse_error':
-      return '数据解析错误';
+      return strings.errorParseError;
     case 'auth_expired':
-      return '认证已过期，请刷新页面重新登录';
+      return strings.errorAuthExpired;
     case 'unknown':
     default:
-      return '发生未知错误，请稍后再试';
+      return strings.errorUnknown;
   }
 }
 
@@ -65,6 +70,7 @@ const INITIAL_SHOW_COUNT = 3;
 export class UIRenderer {
   private container: HTMLElement;
   private theme: ThemeInfo;
+  private strings: I18nStrings;
   private onRetryClick: (() => void) | null = null;
   private onRefreshClick: (() => void) | null = null;
   private onUserClick: ((username: string) => void) | null = null;
@@ -73,6 +79,7 @@ export class UIRenderer {
   constructor(theme: ThemeInfo, container: HTMLElement) {
     this.theme = theme;
     this.container = container;
+    this.strings = getStrings();
   }
 
   /**
@@ -138,12 +145,12 @@ export class UIRenderer {
 
     const title = document.createElement('span');
     title.style.cssText = 'font-size:20px;font-weight:800;line-height:24px;';
-    title.textContent = '未回关用户';
+    title.textContent = this.strings.title;
 
     const refreshBtn = document.createElement('div');
     refreshBtn.style.cssText = 'width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;cursor:pointer;transition:background-color 0.2s;font-size:18px;';
     refreshBtn.textContent = '↻';
-    refreshBtn.title = '刷新数据';
+    refreshBtn.title = this.strings.refresh;
 
     if (state.isLoading) {
       refreshBtn.style.opacity = '0.5';
@@ -167,10 +174,10 @@ export class UIRenderer {
     stats.style.cssText = 'display:flex;gap:16px;padding:0 16px 12px;font-size:13px;opacity:0.7;';
 
     const followingStat = document.createElement('span');
-    followingStat.innerHTML = `<strong style="font-weight:700;opacity:1">${followingCount}</strong> 关注`;
+    followingStat.innerHTML = `<strong style="font-weight:700;opacity:1">${followingCount}</strong> ${this.strings.following}`;
 
     const followersStat = document.createElement('span');
-    followersStat.innerHTML = `<strong style="font-weight:700;opacity:1">${followersCount}</strong> 粉丝`;
+    followersStat.innerHTML = `<strong style="font-weight:700;opacity:1">${followersCount}</strong> ${this.strings.followers}`;
 
     stats.appendChild(followingStat);
     stats.appendChild(followersStat);
@@ -202,19 +209,19 @@ export class UIRenderer {
     if (hasMore) {
       const showMore = document.createElement('div');
       showMore.style.cssText = 'padding:12px 16px;color:rgb(29,155,240);font-size:15px;cursor:pointer;transition:background-color 0.2s;';
-      showMore.textContent = `显示更多`;
+      showMore.textContent = this.strings.showMore;
       showMore.addEventListener('mouseenter', () => { showMore.style.backgroundColor = 'rgba(29,155,240,0.1)'; });
       showMore.addEventListener('mouseleave', () => { showMore.style.backgroundColor = ''; });
       showMore.addEventListener('click', () => {
         if (this.showingAll) {
           renderItems(users.slice(0, INITIAL_SHOW_COUNT));
-          showMore.textContent = '显示更多';
+          showMore.textContent = this.strings.showMore;
           this.showingAll = false;
           list.style.maxHeight = '';
           list.style.overflowY = '';
         } else {
           renderItems(users);
-          showMore.textContent = '收起';
+          showMore.textContent = this.strings.collapse;
           this.showingAll = true;
           list.style.maxHeight = '400px';
           list.style.overflowY = 'auto';
@@ -288,7 +295,7 @@ export class UIRenderer {
 
     const text = document.createElement('p');
     text.style.cssText = 'font-size:14px;opacity:0.6;margin:0;';
-    text.textContent = progress ? formatProgress(progress) : '正在初始化，获取认证信息...';
+    text.textContent = progress ? formatProgress(progress) : this.strings.loading;
 
     container.appendChild(spinner);
     container.appendChild(text);
@@ -312,12 +319,12 @@ export class UIRenderer {
     retryBtn.style.cssText = 'background-color:rgb(29,155,240);color:#fff;border:none;border-radius:9999px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer;';
 
     if (error.retryCount >= error.maxRetries) {
-      retryBtn.textContent = '请稍后再试';
+      retryBtn.textContent = this.strings.retryLater;
       retryBtn.disabled = true;
       retryBtn.style.opacity = '0.5';
       retryBtn.style.cursor = 'not-allowed';
     } else {
-      retryBtn.textContent = '重试';
+      retryBtn.textContent = this.strings.retry;
       retryBtn.addEventListener('click', () => this.onRetryClick?.());
     }
 
@@ -334,7 +341,7 @@ export class UIRenderer {
 
     const message = document.createElement('p');
     message.style.cssText = 'font-size:14px;opacity:0.6;margin:0;';
-    message.textContent = '所有关注的用户都已回关';
+    message.textContent = this.strings.emptyState;
 
     container.appendChild(message);
     return container;

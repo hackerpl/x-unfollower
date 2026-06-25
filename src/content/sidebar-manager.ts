@@ -6,6 +6,7 @@ import { ThemeDetector } from './theme-detector';
 import { MessageType } from '../shared/messages';
 import type { Message, ProgressPayload, CompletePayload, ErrorPayload } from '../shared/messages';
 import type { UserInfo, CachedData } from '../shared/types';
+import { getStrings } from '../shared/i18n';
 
 /** Chrome storage key for cached non-follower results */
 const CACHE_STORAGE_KEY = 'cached_result';
@@ -202,7 +203,7 @@ export class SidebarManager {
       isLoading: false,
       error: {
         errorType: 'auth_expired',
-        message: '请先登录 X 以使用此功能',
+        message: getStrings().loginRequired,
         retryCount: 0,
         maxRetries: 0,
       },
@@ -218,7 +219,7 @@ export class SidebarManager {
       isLoading: false,
       error: {
         errorType: 'auth_expired',
-        message: '认证已过期，请刷新页面重新登录',
+        message: getStrings().errorAuthExpired,
         retryCount: 0,
         maxRetries: 0,
       },
