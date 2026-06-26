@@ -6,9 +6,6 @@ import type {
   SortField,
 } from '../shared/dashboard-types';
 import type {
-  DashboardProgressPayload,
-  DashboardCompletePayload,
-  DashboardErrorPayload,
   UnfollowResultPayload,
 } from '../shared/dashboard-messages';
 import { DashboardMessageType } from '../shared/dashboard-messages';
@@ -46,6 +43,7 @@ export class DashboardManager {
       isLoading: true,
       users: [],
       filteredUsers: [],
+      currentTab: 'all',
       sortField: 'followers_count',
       sortOrder: 'desc',
       searchQuery: '',
@@ -58,6 +56,7 @@ export class DashboardManager {
     this.renderer = new DashboardRenderer(root, this.i18n, {
       onUnfollow: (uid: string) => this.handleUnfollow(uid),
       onRefreshTweet: (uid: string) => this.handleRefreshTweet(uid),
+      onToggleStar: (uid: string) => this.handleToggleStar(uid),
     });
 
     // Set up message listener for background responses
@@ -74,6 +73,13 @@ export class DashboardManager {
     // Show loading state
     this.renderer.renderLoading();
 
+    // Render tabs (left side navigation)
+    this.renderer.renderTabs({
+      currentTab: this.state.currentTab,
+      onTabChange: (tab) => this.handleTabChange(tab),
+      counts: this.getTabCounts(),
+    });
+
     // Render controls (sort + search)
     this.renderer.renderControls({
       onSortChange: (field: SortField, order: 'asc' | 'desc') => this.handleSortChange(field, order),
@@ -85,153 +91,48 @@ export class DashboardManager {
       onClick: () => this.handleFullRefresh(),
     });
 
+    // Render cache hint text
+    this.renderer.renderHint('数据状态保存在本地缓存，刷新页面后保留，切换浏览器失效');
+
     // Load cache
     const cache = await this.store.load();
 
     if (cache) {
-      // Cache exists: render cached data directly (including saved last tweet times)
+      // Cache exists: render cached data directly
       this.state.users = cache.users;
       this.state.lastUpdatedAt = cache.cachedAt;
       this.state.isLoading = false;
       this.applyFilterAndSort();
       this.renderer.hideLoading();
       this.renderer.renderUserList(this.state.filteredUsers);
-      // Auto-refresh last tweet times for users that don't have one yet
-      this.startAutoRefreshTweetTimes();
+      this.renderer.renderTabs({
+        currentTab: this.state.currentTab,
+        onTabChange: (t) => this.handleTabChange(t),
+        counts: this.getTabCounts(),
+      });
+      // Auto-refresh last tweet times for current tab (missing only)
+      this.startAutoRefreshTweetTimes(false);
     } else {
-      // No cache: trigger full fetch
-      this.triggerFullFetch();
+      // No cache: show empty state, data will be populated when user visits X page
+      this.state.isLoading = false;
+      this.renderer.hideLoading();
+      this.renderer.renderError(
+        { errorType: 'unknown', message: '暂无数据，请先访问 X 页面以自动拉取关注列表' },
+        {}
+      );
     }
   }
 
   /**
-   * Send DASHBOARD_FETCH_ALL message to background for full data retrieval.
-   */
-  private triggerFullFetch(): void {
-    try {
-      chrome.runtime.sendMessage({
-        type: DashboardMessageType.DASHBOARD_FETCH_ALL,
-        payload: { userId: this.userId },
-      });
-    } catch (err) {
-      console.warn('[Dashboard] Failed to send fetch message:', err);
-    }
-  }
-
-  /**
-   * Send DASHBOARD_FETCH_ALL for incremental comparison after receiving data.
-   */
-  private triggerIncrementalUpdate(): void {
-    try {
-      chrome.runtime.sendMessage({
-        type: DashboardMessageType.DASHBOARD_FETCH_ALL,
-        payload: { userId: this.userId },
-      });
-    } catch (err) {
-      console.warn('[Dashboard] Failed to send incremental update message:', err);
-    }
-  }
-
-  /**
-   * Handle full refresh action: clear cache and re-fetch all data.
-   * Disables refresh button during the operation and shows progress.
+   * Handle "刷新时间" button: refresh last tweet time for all users in current tab.
    */
   private async handleFullRefresh(): Promise<void> {
     if (this.isRefreshing) return;
-
     this.isRefreshing = true;
-
-    // Disable refresh button and show loading state
     this.renderer.setRefreshButtonDisabled(true);
 
-    // Clear Local_Cache
-    await this.store.clear();
-
-    // Reset state for fresh fetch
-    this.state.isLoading = true;
-    this.state.error = null;
-    this.state.fetchProgress = null;
-    this.renderer.hideError();
-    this.renderer.renderLoading();
-
-    // Trigger full fetch to re-retrieve all data
-    this.triggerFullFetch();
-  }
-
-  /**
-   * Handle progress update from background during data fetch.
-   */
-  private handleProgress(payload: DashboardProgressPayload): void {
-    this.state.fetchProgress = {
-      current: payload.current,
-      total: payload.total,
-    };
-    this.renderer.renderProgress(this.state.fetchProgress);
-  }
-
-  /**
-   * Handle fetch completion from background.
-   * Save to cache, update state, re-render.
-   */
-  private async handleComplete(payload: DashboardCompletePayload): Promise<void> {
-    // Save to cache
-    await this.store.save(payload.users, payload.timestamp);
-
-    // Update state
-    this.state.users = payload.users;
-    this.state.lastUpdatedAt = payload.timestamp;
-    this.state.isLoading = false;
-    this.state.fetchProgress = null;
-    this.state.error = null;
-
-    // Apply sort/filter and re-render
-    this.applyFilterAndSort();
-    this.renderer.hideLoading();
-    this.renderer.hideProgress();
-    this.renderer.renderUserList(this.state.filteredUsers);
-
-    // Re-enable refresh button after completion
-    this.isRefreshing = false;
-    this.renderer.setRefreshButtonDisabled(false);
-
-    // Start auto-refreshing last tweet times for users that don't have one
-    this.startAutoRefreshTweetTimes();
-  }
-
-  /**
-   * Handle error from background during fetch.
-   */
-  private handleError(payload: DashboardErrorPayload): void {
-    this.state.error = {
-      errorType: payload.errorType,
-      message: payload.message,
-    };
-    this.state.isLoading = false;
-    this.state.fetchProgress = null;
-
-    // If partial data is provided, keep it
-    if (payload.partialData && payload.partialData.length > 0) {
-      this.state.users = payload.partialData;
-      this.applyFilterAndSort();
-      this.renderer.renderUserList(this.state.filteredUsers);
-    }
-
-    this.renderer.hideLoading();
-    this.renderer.hideProgress();
-
-    // Re-enable refresh button on error
-    this.isRefreshing = false;
-    this.renderer.setRefreshButtonDisabled(false);
-
-    this.renderer.renderError(this.state.error, {
-      onRetry: () => {
-        this.renderer.hideError();
-        this.state.error = null;
-        this.state.isLoading = true;
-        this.renderer.renderLoading();
-        this.triggerFullFetch();
-      },
-    });
+    // Start auto-refresh for ALL users in current tab (not just missing)
+    this.startAutoRefreshTweetTimes(true);
   }
 
   /**
@@ -251,6 +152,34 @@ export class DashboardManager {
     this.state.searchQuery = query;
     this.applyFilterAndSort();
     this.renderer.renderUserList(this.state.filteredUsers);
+  }
+
+  /**
+   * Handle tab change.
+   */
+  private handleTabChange(tab: 'all' | 'starred' | 'quality' | 'growing'): void {
+    this.state.currentTab = tab;
+    this.applyFilterAndSort();
+    this.renderer.renderUserList(this.state.filteredUsers);
+    this.renderer.renderTabs({
+      currentTab: this.state.currentTab,
+      onTabChange: (t) => this.handleTabChange(t),
+      counts: this.getTabCounts(),
+    });
+    // Restart auto-refresh for missing last tweet in new tab
+    this.startAutoRefreshTweetTimes(false);
+  }
+
+  /**
+   * Get user counts for each tab.
+   */
+  private getTabCounts(): { all: number; starred: number; quality: number; growing: number } {
+    return {
+      all: this.state.users.length,
+      starred: this.state.users.filter((u) => u.starred).length,
+      quality: this.state.users.filter((u) => u.friendsCount > 0 && u.followersCount / u.friendsCount > 10).length,
+      growing: this.state.users.filter((u) => u.friendsCount > 0 && u.followersCount / u.friendsCount < 1).length,
+    };
   }
 
   /**
@@ -279,6 +208,24 @@ export class DashboardManager {
       console.warn('[Dashboard] Failed to refresh tweet time:', err);
       return null;
     }
+  }
+
+  /**
+   * Toggle starred status for a user. Starred users are pinned to top.
+   */
+  private async handleToggleStar(userId: string): Promise<void> {
+    const userIndex = this.state.users.findIndex((u) => u.userId === userId);
+    if (userIndex === -1) return;
+
+    const newStarred = !this.state.users[userIndex].starred;
+    this.state.users[userIndex].starred = newStarred;
+
+    // Persist to cache
+    await this.store.updateUser(userId, { starred: newStarred });
+
+    // Re-render
+    this.applyFilterAndSort();
+    this.renderer.renderUserList(this.state.filteredUsers);
   }
 
   /**
@@ -331,12 +278,38 @@ export class DashboardManager {
    * Apply current filter (search) and sort to users, updating filteredUsers.
    */
   private applyFilterAndSort(): void {
-    const filtered = filterUsers(this.state.users, this.state.searchQuery);
-    this.state.filteredUsers = sortUsers(filtered, this.state.sortField, this.state.sortOrder);
+    let users = this.state.users;
+
+    // Filter by current tab
+    switch (this.state.currentTab) {
+      case 'starred':
+        users = users.filter((u) => u.starred);
+        break;
+      case 'quality':
+        users = users.filter((u) => u.friendsCount > 0 && u.followersCount / u.friendsCount > 10);
+        break;
+      case 'growing':
+        users = users.filter((u) => u.friendsCount > 0 && u.followersCount / u.friendsCount < 1);
+        break;
+      // 'all' shows everything
+    }
+
+    // Apply search filter
+    const filtered = filterUsers(users, this.state.searchQuery);
+
+    // Separate starred and non-starred users
+    const starred = filtered.filter((u) => u.starred);
+    const nonStarred = filtered.filter((u) => !u.starred);
+
+    // Only sort non-starred users; starred stay in original order at top
+    const sortedNonStarred = sortUsers(nonStarred, this.state.sortField, this.state.sortOrder);
+
+    this.state.filteredUsers = [...starred, ...sortedNonStarred];
   }
 
   /**
    * Set up Chrome runtime message listener for background responses.
+   * Only listens for UNFOLLOW_RESULT now (dashboard no longer fetches user lists).
    */
   private setupMessageListener(): void {
     this.messageListener = (message: unknown) => {
@@ -344,15 +317,6 @@ export class DashboardManager {
       if (!msg || !msg.type) return;
 
       switch (msg.type) {
-        case DashboardMessageType.DASHBOARD_PROGRESS:
-          this.handleProgress(msg.payload as DashboardProgressPayload);
-          break;
-        case DashboardMessageType.DASHBOARD_COMPLETE:
-          this.handleComplete(msg.payload as DashboardCompletePayload);
-          break;
-        case DashboardMessageType.DASHBOARD_ERROR:
-          this.handleError(msg.payload as DashboardErrorPayload);
-          break;
         case DashboardMessageType.UNFOLLOW_RESULT:
           this.handleUnfollowResult(msg.payload as UnfollowResultPayload);
           break;
@@ -381,40 +345,66 @@ export class DashboardManager {
   }
 
   /**
-   * Start auto-refreshing last tweet times every 20 seconds for ALL users sequentially.
-   * Picks one user at a time, cycling through the full list.
+   * Start auto-refreshing last tweet times every 20 seconds for users in current tab.
+   * @param refreshAll - if true, refresh ALL users in current tab; if false, only those missing lastTweetTime
    */
-  private startAutoRefreshTweetTimes(): void {
+  private startAutoRefreshTweetTimes(refreshAll: boolean): void {
     // Stop any existing timer
     this.stopAutoRefreshTweetTimes();
 
-    if (this.state.users.length === 0) return;
+    // Get users for current tab
+    let tabUsers = this.getUsersForCurrentTab();
+
+    // Filter to only missing if not refreshAll
+    if (!refreshAll) {
+      tabUsers = tabUsers.filter((u) => !u.lastTweetTime);
+    }
+
+    if (tabUsers.length === 0) {
+      // Nothing to refresh, re-enable button
+      this.isRefreshing = false;
+      this.renderer.setRefreshButtonDisabled(false);
+      return;
+    }
 
     let queueIndex = 0;
+    const queue = tabUsers.map((u) => u.userId);
 
     this.autoRefreshTimer = setInterval(async () => {
-      if (this.state.users.length === 0) {
+      // Stop after one full pass
+      if (queueIndex >= queue.length) {
         this.stopAutoRefreshTweetTimes();
+        this.isRefreshing = false;
+        this.renderer.setRefreshButtonDisabled(false);
         return;
       }
 
-      // Stop after one full pass through all users
-      if (queueIndex >= this.state.users.length) {
-        this.stopAutoRefreshTweetTimes();
-        return;
-      }
-
-      const user = this.state.users[queueIndex];
+      const userId = queue[queueIndex];
       queueIndex++;
 
-      // Fetch last tweet time for this user (updates cache internally)
-      const time = await this.handleRefreshTweet(user.userId);
+      // Fetch last tweet time for this user
+      const time = await this.handleRefreshTweet(userId);
       if (time) {
-        // Re-render to update the UI
         this.applyFilterAndSort();
         this.renderer.renderUserList(this.state.filteredUsers);
       }
     }, 20000); // 20 seconds interval
+  }
+
+  /**
+   * Get users filtered by current tab (without search/sort applied).
+   */
+  private getUsersForCurrentTab(): import('../shared/dashboard-types').FollowingDetail[] {
+    switch (this.state.currentTab) {
+      case 'starred':
+        return this.state.users.filter((u) => u.starred);
+      case 'quality':
+        return this.state.users.filter((u) => u.friendsCount > 0 && u.followersCount / u.friendsCount > 10);
+      case 'growing':
+        return this.state.users.filter((u) => u.friendsCount > 0 && u.followersCount / u.friendsCount < 1);
+      default:
+        return this.state.users;
+    }
   }
 
   /**

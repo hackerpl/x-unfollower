@@ -75,6 +75,12 @@ interface TimelineEntry {
             name: string;
             screen_name: string;
             profile_image_url_https: string;
+            description?: string;
+            friends_count?: number;
+            followers_count?: number;
+            status?: {
+              created_at?: string;
+            };
           };
         };
       };
@@ -137,6 +143,70 @@ export function parseUserEntries(instructions: TimelineInstruction[]): {
 }
 
 /**
+ * Parse user entries with full detail (for dashboard cache).
+ * Extracts friends_count, followers_count, bio, last tweet time from the same GraphQL response.
+ */
+export function parseUserEntriesDetailed(instructions: TimelineInstruction[]): {
+  users: import('../shared/dashboard-types').FollowingDetail[];
+  nextCursor: string | null;
+} {
+  const users: import('../shared/dashboard-types').FollowingDetail[] = [];
+  let nextCursor: string | null = null;
+
+  for (const instruction of instructions) {
+    if (instruction.type !== 'TimelineAddEntries' || !instruction.entries) {
+      continue;
+    }
+
+    for (const entry of instruction.entries) {
+      const { content } = entry;
+
+      if (content.cursorType === 'Bottom' && content.value) {
+        nextCursor = content.value;
+        continue;
+      }
+
+      if (!content.itemContent?.user_results?.result) {
+        continue;
+      }
+
+      const userResult = content.itemContent.user_results.result;
+      const restId = userResult.rest_id;
+      const legacy = userResult.legacy;
+
+      if (!restId || !legacy?.screen_name) {
+        continue;
+      }
+
+      // Extract last tweet time from status
+      let lastTweetTime: string | null = null;
+      if (legacy.status?.created_at) {
+        try {
+          const date = new Date(legacy.status.created_at);
+          if (!isNaN(date.getTime())) {
+            lastTweetTime = date.toISOString();
+          }
+        } catch { /* ignore */ }
+      }
+
+      users.push({
+        userId: restId,
+        username: legacy.screen_name,
+        displayName: legacy.name || '',
+        avatarUrl: (legacy.profile_image_url_https || '').replace('_normal', '_400x400'),
+        bio: legacy.description || null,
+        friendsCount: legacy.friends_count ?? 0,
+        followersCount: legacy.followers_count ?? 0,
+        lastTweetTime,
+        fetchedAt: Date.now(),
+      });
+    }
+  }
+
+  return { users, nextCursor };
+}
+
+/**
  * Build the GraphQL request URL with query parameters.
  */
 function buildGraphQLUrl(
@@ -170,6 +240,9 @@ function buildGraphQLUrl(
 export class APIClient {
   private credentials: AuthCredentials;
   private pageSize: number;
+
+  /** Detailed following users collected during fetchAllFollowing (for dashboard cache) */
+  public detailedFollowing: import('../shared/dashboard-types').FollowingDetail[] = [];
 
   constructor(credentials: AuthCredentials, pageSize = 100) {
     this.credentials = credentials;
@@ -446,6 +519,11 @@ export class APIClient {
       }
 
       const { users, nextCursor } = parseUserEntries(instructions);
+
+      // Also collect detailed user info for dashboard cache
+      const { users: detailed } = parseUserEntriesDetailed(instructions);
+      this.detailedFollowing.push(...detailed);
+
       console.log(`[X-NF] Page result: ${users.length} users, nextCursor: ${nextCursor ? 'yes' : 'no'}`);
 
       return {

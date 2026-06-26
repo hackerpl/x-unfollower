@@ -92,6 +92,8 @@ export interface DashboardRendererCallbacks {
   onUnfollow: (userId: string) => Promise<boolean>;
   /** Called when user clicks the refresh button for a user's last tweet time. Returns the ISO time or null. */
   onRefreshTweet?: (userId: string) => Promise<string | null>;
+  /** Called when user clicks the star button to toggle starred status. */
+  onToggleStar?: (userId: string) => void;
 }
 
 /**
@@ -127,6 +129,44 @@ export class DashboardRenderer {
    */
   setCallbacks(callbacks: DashboardRendererCallbacks): void {
     this.callbacks = callbacks;
+  }
+
+  /**
+   * Render tab navigation bar above the controls.
+   */
+  renderTabs(options: {
+    currentTab: 'all' | 'starred' | 'quality' | 'growing';
+    onTabChange: (tab: 'all' | 'starred' | 'quality' | 'growing') => void;
+    counts: { all: number; starred: number; quality: number; growing: number };
+  }): void {
+    // Remove existing tabs if re-rendered
+    const existing = this.root.querySelector('.dashboard-tabs');
+    if (existing) {
+      existing.remove();
+    }
+
+    const tabsDiv = document.createElement('div');
+    tabsDiv.className = 'dashboard-tabs';
+
+    const tabs: Array<{ id: 'all' | 'starred' | 'quality' | 'growing'; label: string; count: number }> = [
+      { id: 'all', label: '全部', count: options.counts.all },
+      { id: 'starred', label: '★ 星标', count: options.counts.starred },
+      { id: 'quality', label: '🔥 高质', count: options.counts.quality },
+      { id: 'growing', label: '🌱 成长', count: options.counts.growing },
+    ];
+
+    for (const tab of tabs) {
+      const btn = document.createElement('button');
+      btn.className = 'dashboard-tab' + (tab.id === options.currentTab ? ' active' : '');
+      btn.innerHTML = `${tab.label} <span class="tab-count">${tab.count}</span>`;
+      btn.addEventListener('click', () => {
+        options.onTabChange(tab.id);
+      });
+      tabsDiv.appendChild(btn);
+    }
+
+    // Insert at the very top of root (before controls)
+    this.root.insertBefore(tabsDiv, this.root.firstChild);
   }
 
   /**
@@ -230,7 +270,7 @@ export class DashboardRenderer {
     // Table header
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    const headers = ['', '@', 'Name', 'Bio', 'Following', 'Followers', 'Last Tweet', 'Action'];
+    const headers = ['★', '', '@', 'Name', 'Bio', 'Following', 'Followers', 'Last Tweet', 'Action'];
     for (const text of headers) {
       const th = document.createElement('th');
       th.textContent = text;
@@ -484,11 +524,45 @@ export class DashboardRenderer {
   }
 
   /**
+   * Render a small hint/tip text below the controls area.
+   */
+  renderHint(text: string): void {
+    const hint = document.createElement('div');
+    hint.className = 'dashboard-hint';
+    hint.textContent = text;
+    this.root.insertBefore(hint, this.container);
+  }
+
+  /**
    * Render a single user row in the table.
    */
   private renderUserRow(user: FollowingDetail): HTMLTableRowElement {
     const row = document.createElement('tr');
     row.className = 'dashboard-user-row';
+    if (user.starred) {
+      row.classList.add('starred-row');
+    }
+
+    // Highlight based on followers/following ratio
+    if (user.friendsCount > 0) {
+      const ratio = user.followersCount / user.friendsCount;
+      if (ratio > 10) {
+        row.classList.add('ratio-high');
+      }
+    }
+
+    // Star cell
+    const starCell = document.createElement('td');
+    starCell.className = 'cell-star';
+    const starBtn = document.createElement('button');
+    starBtn.className = user.starred ? 'star-btn active' : 'star-btn';
+    starBtn.textContent = user.starred ? '★' : '☆';
+    starBtn.title = user.starred ? 'Remove star' : 'Add star';
+    starBtn.addEventListener('click', () => {
+      this.callbacks?.onToggleStar?.(user.userId);
+    });
+    starCell.appendChild(starBtn);
+    row.appendChild(starCell);
 
     // Avatar cell
     const avatarCell = document.createElement('td');
@@ -583,34 +657,38 @@ export class DashboardRenderer {
     }
     row.appendChild(lastTweetCell);
 
-    // Action cell with unfollow button
+    // Action cell - hide unfollow button for starred users
     const actionCell = document.createElement('td');
     actionCell.className = 'cell-action';
-    const unfollowBtn = document.createElement('button');
-    unfollowBtn.className = 'follow-btn following';
-    unfollowBtn.textContent = this.i18n.followingButton;
-    unfollowBtn.setAttribute('data-user-id', user.userId);
 
-    // Hover: show "Unfollow" state with red styling
-    unfollowBtn.addEventListener('mouseenter', () => {
-      if (unfollowBtn.classList.contains('loading')) return;
-      unfollowBtn.classList.add('hover');
-      unfollowBtn.textContent = this.i18n.unfollowButton;
-    });
-
-    // Mouse leave: restore default "Following" state
-    unfollowBtn.addEventListener('mouseleave', () => {
-      if (unfollowBtn.classList.contains('loading')) return;
-      unfollowBtn.classList.remove('hover');
+    if (!user.starred) {
+      const unfollowBtn = document.createElement('button');
+      unfollowBtn.className = 'follow-btn following';
       unfollowBtn.textContent = this.i18n.followingButton;
-    });
+      unfollowBtn.setAttribute('data-user-id', user.userId);
 
-    // Click: trigger unfollow action
-    unfollowBtn.addEventListener('click', () => {
-      this.handleUnfollowClick(unfollowBtn, row, user.userId);
-    });
+      // Hover: show "Unfollow" state with red styling
+      unfollowBtn.addEventListener('mouseenter', () => {
+        if (unfollowBtn.classList.contains('loading')) return;
+        unfollowBtn.classList.add('hover');
+        unfollowBtn.textContent = this.i18n.unfollowButton;
+      });
 
-    actionCell.appendChild(unfollowBtn);
+      // Mouse leave: restore default "Following" state
+      unfollowBtn.addEventListener('mouseleave', () => {
+        if (unfollowBtn.classList.contains('loading')) return;
+        unfollowBtn.classList.remove('hover');
+        unfollowBtn.textContent = this.i18n.followingButton;
+      });
+
+      // Click: trigger unfollow action
+      unfollowBtn.addEventListener('click', () => {
+        this.handleUnfollowClick(unfollowBtn, row, user.userId);
+      });
+
+      actionCell.appendChild(unfollowBtn);
+    }
+
     row.appendChild(actionCell);
 
     return row;
@@ -829,33 +907,76 @@ export class DashboardRenderer {
       .dashboard-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 14px;
-        color: #e7e9ea;
-        background-color: #000;
+        font-size: 13px;
+        color: #b8fff0;
+        background-color: rgba(10, 10, 15, 0.8);
+        border: 1px solid rgba(0, 255, 213, 0.1);
+        border-radius: 8px;
+        overflow: hidden;
       }
 
       .dashboard-table thead th {
         text-align: left;
         padding: 12px 8px;
-        border-bottom: 1px solid #2f3336;
-        font-weight: 700;
-        font-size: 13px;
-        color: #71767b;
+        border-bottom: 1px solid rgba(0, 255, 213, 0.15);
+        font-weight: 600;
+        font-size: 11px;
+        color: rgba(0, 255, 213, 0.6);
         white-space: nowrap;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
       }
 
       .dashboard-table tbody tr {
-        border-bottom: 1px solid #2f3336;
-        transition: background-color 0.15s ease;
+        border-bottom: 1px solid rgba(0, 255, 213, 0.06);
+        transition: background-color 0.2s ease, box-shadow 0.2s ease;
       }
 
       .dashboard-table tbody tr:hover {
-        background-color: rgba(255, 255, 255, 0.03);
+        background-color: rgba(0, 255, 213, 0.04);
+        box-shadow: inset 0 0 20px rgba(0, 255, 213, 0.02);
       }
 
       .dashboard-table td {
         padding: 10px 8px;
         vertical-align: middle;
+      }
+
+      .cell-star {
+        width: 32px;
+        text-align: center;
+      }
+
+      .star-btn {
+        background: transparent;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        color: rgba(0, 255, 213, 0.3);
+        padding: 4px;
+        line-height: 1;
+        transition: color 0.2s, transform 0.15s, text-shadow 0.2s;
+      }
+
+      .star-btn:hover {
+        color: #00ffd5;
+        transform: scale(1.2);
+        text-shadow: 0 0 8px rgba(0, 255, 213, 0.5);
+      }
+
+      .star-btn.active {
+        color: #ff00ff;
+        text-shadow: 0 0 10px rgba(255, 0, 255, 0.6);
+      }
+
+      .starred-row {
+        background-color: rgba(255, 0, 255, 0.05);
+        border-left: 2px solid rgba(255, 0, 255, 0.4);
+      }
+
+      .ratio-high {
+        background-color: rgba(0, 255, 213, 0.08);
+        border-left: 3px solid rgba(0, 255, 213, 0.6);
       }
 
       .cell-avatar {
@@ -873,13 +994,15 @@ export class DashboardRenderer {
       }
 
       .username-link {
-        color: rgb(29, 155, 240);
+        color: #00ffd5;
         text-decoration: none;
         cursor: pointer;
+        transition: text-shadow 0.2s;
       }
 
       .username-link:hover {
-        text-decoration: underline;
+        text-decoration: none;
+        text-shadow: 0 0 8px rgba(0, 255, 213, 0.5);
       }
 
       .cell-displayname {
@@ -899,8 +1022,8 @@ export class DashboardRenderer {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        color: #71767b;
-        font-size: 13px;
+        color: rgba(184, 255, 240, 0.5);
+        font-size: 12px;
         cursor: default;
       }
 
@@ -908,32 +1031,34 @@ export class DashboardRenderer {
         text-align: right;
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
+        color: rgba(0, 255, 213, 0.8);
       }
 
       .cell-time {
         white-space: nowrap;
-        color: #71767b;
+        color: rgba(120, 0, 255, 0.7);
       }
 
       .refresh-time-btn {
         background: transparent;
-        border: 1px solid #536471;
+        border: 1px solid rgba(0, 255, 213, 0.3);
         border-radius: 50%;
         width: 26px;
         height: 26px;
-        color: #71767b;
+        color: rgba(0, 255, 213, 0.5);
         font-size: 14px;
         cursor: pointer;
-        transition: border-color 0.2s, color 0.2s;
+        transition: border-color 0.2s, color 0.2s, box-shadow 0.2s;
       }
 
       .refresh-time-btn:hover:not(:disabled) {
-        border-color: rgb(29, 155, 240);
-        color: rgb(29, 155, 240);
+        border-color: #00ffd5;
+        color: #00ffd5;
+        box-shadow: 0 0 8px rgba(0, 255, 213, 0.3);
       }
 
       .refresh-time-btn:disabled {
-        opacity: 0.5;
+        opacity: 0.4;
         cursor: not-allowed;
       }
 
@@ -951,14 +1076,61 @@ export class DashboardRenderer {
         cursor: default;
       }
 
+      /* Tab navigation */
+      .dashboard-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 12px 8px;
+        border-bottom: 1px solid rgba(0, 255, 213, 0.1);
+        background-color: rgba(10, 10, 15, 0.6);
+      }
+
+      .dashboard-tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 500;
+        color: rgba(0, 255, 213, 0.5);
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+        font-family: inherit;
+      }
+
+      .dashboard-tab:hover {
+        background-color: rgba(0, 255, 213, 0.05);
+        color: #00ffd5;
+      }
+
+      .dashboard-tab.active {
+        color: #00ffd5;
+        background-color: rgba(0, 255, 213, 0.08);
+        border-color: rgba(0, 255, 213, 0.4);
+        box-shadow: 0 0 12px rgba(0, 255, 213, 0.1);
+      }
+
+      .tab-count {
+        font-size: 11px;
+        color: rgba(120, 0, 255, 0.7);
+        font-weight: 400;
+      }
+
+      .dashboard-tab.active .tab-count {
+        color: #7800ff;
+      }
+
       /* Sort and search controls */
       .dashboard-controls {
         display: flex;
         align-items: center;
         gap: 12px;
         padding: 12px 8px;
-        border-bottom: 1px solid #2f3336;
-        background-color: #000;
+        border-bottom: 1px solid rgba(0, 255, 213, 0.08);
+        background-color: rgba(10, 10, 15, 0.4);
       }
 
       .dashboard-sort-controls {
@@ -968,57 +1140,62 @@ export class DashboardRenderer {
       }
 
       .dashboard-sort-select {
-        background-color: #16181c;
-        color: #e7e9ea;
-        border: 1px solid #2f3336;
-        border-radius: 6px;
+        background-color: rgba(0, 255, 213, 0.05);
+        color: #00ffd5;
+        border: 1px solid rgba(0, 255, 213, 0.2);
+        border-radius: 4px;
         padding: 6px 10px;
-        font-size: 13px;
+        font-size: 12px;
+        font-family: inherit;
         cursor: pointer;
         outline: none;
-        appearance: auto;
       }
 
       .dashboard-sort-select:focus {
-        border-color: rgb(29, 155, 240);
+        border-color: rgba(0, 255, 213, 0.5);
+        box-shadow: 0 0 8px rgba(0, 255, 213, 0.15);
       }
 
       .dashboard-sort-order-btn {
-        background-color: #16181c;
-        color: #e7e9ea;
-        border: 1px solid #2f3336;
-        border-radius: 6px;
+        background-color: rgba(0, 255, 213, 0.05);
+        color: #00ffd5;
+        border: 1px solid rgba(0, 255, 213, 0.2);
+        border-radius: 4px;
         padding: 6px 12px;
-        font-size: 13px;
+        font-size: 12px;
+        font-family: inherit;
         cursor: pointer;
         white-space: nowrap;
-        transition: border-color 0.15s ease, background-color 0.15s ease;
+        transition: border-color 0.2s, box-shadow 0.2s;
       }
 
       .dashboard-sort-order-btn:hover {
-        background-color: #1d1f23;
-        border-color: #536471;
+        border-color: rgba(0, 255, 213, 0.5);
+        box-shadow: 0 0 8px rgba(0, 255, 213, 0.15);
       }
 
       .dashboard-search-input {
         flex: 1;
-        background-color: #16181c;
-        color: #e7e9ea;
-        border: 1px solid #2f3336;
-        border-radius: 20px;
+        background-color: rgba(0, 255, 213, 0.03);
+        color: #b8fff0;
+        border: 1px solid rgba(0, 255, 213, 0.15);
+        border-radius: 4px;
         padding: 8px 16px;
-        font-size: 14px;
+        font-size: 13px;
+        font-family: inherit;
         outline: none;
         min-width: 180px;
+        transition: border-color 0.2s, box-shadow 0.2s;
       }
 
       .dashboard-search-input::placeholder {
-        color: #71767b;
+        color: rgba(0, 255, 213, 0.3);
       }
 
       .dashboard-search-input:focus {
-        border-color: rgb(29, 155, 240);
-        background-color: #000;
+        border-color: rgba(0, 255, 213, 0.5);
+        box-shadow: 0 0 12px rgba(0, 255, 213, 0.1);
+        background-color: rgba(0, 255, 213, 0.05);
       }
 
       .dashboard-tooltip {
@@ -1026,16 +1203,16 @@ export class DashboardRenderer {
         position: fixed;
         max-width: 360px;
         padding: 10px 14px;
-        background-color: #1a1a1a;
-        color: #e7e9ea;
-        border: 1px solid #2f3336;
-        border-radius: 8px;
-        font-size: 13px;
+        background-color: #0d0d1a;
+        color: #b8fff0;
+        border: 1px solid rgba(0, 255, 213, 0.3);
+        border-radius: 4px;
+        font-size: 12px;
         line-height: 1.5;
         white-space: pre-wrap;
         word-break: break-word;
         z-index: 10000;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 4px 20px rgba(0, 255, 213, 0.1), 0 0 1px rgba(0, 255, 213, 0.3);
         pointer-events: none;
       }
 
@@ -1045,34 +1222,36 @@ export class DashboardRenderer {
         display: none;
         padding: 10px 16px;
         margin-bottom: 8px;
-        background-color: #16181c;
-        border: 1px solid #2f3336;
-        border-radius: 8px;
+        background-color: rgba(0, 255, 213, 0.03);
+        border: 1px solid rgba(0, 255, 213, 0.1);
+        border-radius: 4px;
       }
 
       .progress-text {
-        font-size: 13px;
-        color: #e7e9ea;
+        font-size: 12px;
+        color: rgba(0, 255, 213, 0.7);
         margin-bottom: 6px;
       }
 
       .progress-bar-track {
         width: 100%;
-        height: 4px;
-        background-color: #2f3336;
+        height: 3px;
+        background-color: rgba(0, 255, 213, 0.1);
         border-radius: 2px;
         overflow: hidden;
       }
 
       .progress-bar-fill {
         height: 100%;
-        background-color: rgb(29, 155, 240);
+        background: linear-gradient(90deg, #00ffd5, #7800ff);
         border-radius: 2px;
         transition: width 0.3s ease;
+        box-shadow: 0 0 6px rgba(0, 255, 213, 0.4);
       }
 
       .progress-bar-fill.grok-fill {
-        background-color: #7856ff;
+        background: linear-gradient(90deg, #7800ff, #ff00ff);
+        box-shadow: 0 0 6px rgba(120, 0, 255, 0.4);
       }
 
       /* Error card styles */
@@ -1083,9 +1262,9 @@ export class DashboardRenderer {
         justify-content: center;
         padding: 32px 24px;
         margin: 16px 0;
-        background-color: #16181c;
-        border: 1px solid #2f3336;
-        border-radius: 12px;
+        background-color: rgba(255, 0, 60, 0.03);
+        border: 1px solid rgba(255, 0, 60, 0.2);
+        border-radius: 4px;
         text-align: center;
         gap: 12px;
       }
@@ -1096,8 +1275,8 @@ export class DashboardRenderer {
       }
 
       .error-message {
-        font-size: 14px;
-        color: #e7e9ea;
+        font-size: 13px;
+        color: #b8fff0;
         line-height: 1.5;
         max-width: 400px;
       }
@@ -1105,19 +1284,20 @@ export class DashboardRenderer {
       .error-retry-btn {
         margin-top: 8px;
         padding: 8px 20px;
-        font-size: 14px;
-        font-weight: 700;
-        color: #e7e9ea;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        color: #00ffd5;
         background-color: transparent;
-        border: 1px solid #536471;
-        border-radius: 9999px;
+        border: 1px solid rgba(0, 255, 213, 0.3);
+        border-radius: 4px;
         cursor: pointer;
-        transition: background-color 0.2s ease, border-color 0.2s ease;
+        transition: background-color 0.2s, box-shadow 0.2s;
       }
 
       .error-retry-btn:hover {
-        background-color: rgba(239, 243, 244, 0.1);
-        border-color: #e7e9ea;
+        background-color: rgba(0, 255, 213, 0.08);
+        box-shadow: 0 0 10px rgba(0, 255, 213, 0.15);
       }
 
       /* Loading state styles */
@@ -1133,35 +1313,38 @@ export class DashboardRenderer {
       .loading-spinner {
         width: 28px;
         height: 28px;
-        border: 3px solid #2f3336;
-        border-top-color: rgb(29, 155, 240);
+        border: 2px solid rgba(0, 255, 213, 0.15);
+        border-top-color: #00ffd5;
         border-radius: 50%;
         animation: dashboard-spin 0.8s linear infinite;
+        box-shadow: 0 0 10px rgba(0, 255, 213, 0.2);
       }
 
       .loading-text {
-        font-size: 14px;
-        color: #71767b;
+        font-size: 13px;
+        color: rgba(0, 255, 213, 0.6);
       }
 
       /* Unfollow button styles */
       .follow-btn.following {
-        border: 1px solid rgb(83, 100, 113);
-        border-radius: 9999px;
+        border: 1px solid rgba(0, 255, 213, 0.3);
+        border-radius: 4px;
         padding: 6px 16px;
-        color: #fff;
+        color: #00ffd5;
         background: transparent;
         cursor: pointer;
-        font-weight: 700;
-        font-size: 14px;
+        font-weight: 600;
+        font-size: 12px;
+        font-family: inherit;
         white-space: nowrap;
-        transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+        transition: border-color 0.2s, color 0.2s, background-color 0.2s, box-shadow 0.2s;
       }
 
       .follow-btn.following.hover {
-        border-color: rgb(244, 33, 46);
-        color: rgb(244, 33, 46);
-        background-color: rgba(244, 33, 46, 0.1);
+        border-color: #ff003c;
+        color: #ff003c;
+        background-color: rgba(255, 0, 60, 0.1);
+        box-shadow: 0 0 10px rgba(255, 0, 60, 0.2);
       }
 
       .follow-btn.following.loading {
@@ -1207,30 +1390,63 @@ export class DashboardRenderer {
       .dashboard-refresh-btn {
         margin-left: auto;
         padding: 6px 16px;
-        font-size: 13px;
-        font-weight: 700;
-        color: #e7e9ea;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        color: #00ffd5;
         background-color: transparent;
-        border: 1px solid #536471;
-        border-radius: 9999px;
+        border: 1px solid rgba(0, 255, 213, 0.3);
+        border-radius: 4px;
         cursor: pointer;
         white-space: nowrap;
-        transition: background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+        transition: background-color 0.2s, box-shadow 0.2s, opacity 0.2s;
       }
 
       .dashboard-refresh-btn:hover:not(:disabled) {
-        background-color: rgba(239, 243, 244, 0.1);
-        border-color: #e7e9ea;
+        background-color: rgba(0, 255, 213, 0.08);
+        box-shadow: 0 0 10px rgba(0, 255, 213, 0.15);
       }
 
       .dashboard-refresh-btn:disabled {
-        opacity: 0.5;
+        opacity: 0.4;
         cursor: not-allowed;
       }
 
       .dashboard-refresh-btn.loading {
-        opacity: 0.5;
+        opacity: 0.4;
         pointer-events: none;
+      }
+
+      .dashboard-hint {
+        padding: 6px 16px;
+        font-size: 11px;
+        color: rgba(120, 0, 255, 0.5);
+        text-align: center;
+        letter-spacing: 0.3px;
+      }
+
+      /* Toast notification */
+      .dashboard-toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background-color: rgba(255, 0, 60, 0.9);
+        color: #fff;
+        padding: 10px 20px;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        z-index: 10001;
+        opacity: 0;
+        transition: opacity 0.3s, transform 0.3s;
+        pointer-events: none;
+        box-shadow: 0 0 15px rgba(255, 0, 60, 0.3);
+      }
+
+      .dashboard-toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
       }
 
       @keyframes dashboard-spin {

@@ -12,6 +12,7 @@ export interface FollowingDetail {
   friendsCount: number; // Number of accounts this user follows
   followersCount: number; // Number of followers this user has
   lastTweetTime: string | null; // ISO 8601 timestamp of most recent tweet
+  starred?: boolean; // Whether user is starred (pinned to top)
   fetchedAt: number; // Timestamp when detail was fetched
 }
 
@@ -52,6 +53,7 @@ export interface DashboardState {
   isLoading: boolean;
   users: FollowingDetail[];
   filteredUsers: FollowingDetail[];
+  currentTab: 'all' | 'starred' | 'quality' | 'growing';
   sortField: SortField;
   sortOrder: 'asc' | 'desc';
   searchQuery: string;

@@ -146,7 +146,8 @@ export class UIRenderer {
 
     const title = document.createElement('span');
     title.style.cssText = 'font-size:20px;font-weight:800;line-height:24px;';
-    title.textContent = this.strings.title;
+    const count = state.nonFollowers.length;
+    title.textContent = count > 0 ? `${this.strings.title}（${count}）` : this.strings.title;
 
     // Dashboard entry button - opens the following dashboard in a new tab
     const dashboardBtn = document.createElement('div');

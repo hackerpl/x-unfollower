@@ -190,6 +190,36 @@ async function handleStartFetch(tabId: number): Promise<void> {
   const result = calculateNonFollowers(following, followers);
   console.log(`[X-NF] Calculation complete: ${result.nonFollowers.length} non-followers (following: ${result.followingCount}, followers: ${result.followersCount})`);
 
+  // Step 5.5: Write detailed following data to dashboard_cache (preserving starred/lastTweetTime)
+  try {
+    const detailedUsers = apiClient.detailedFollowing;
+    if (detailedUsers.length > 0) {
+      const existingCache = await chrome.storage.local.get('dashboard_cache');
+      const oldCache = existingCache['dashboard_cache'] as { users?: any[] } | undefined;
+      const oldUsersMap = new Map<string, any>();
+      if (oldCache?.users) {
+        for (const u of oldCache.users) {
+          oldUsersMap.set(u.userId, u);
+        }
+      }
+      // Merge: keep starred and lastTweetTime from old cache
+      const mergedUsers = detailedUsers.map((u) => {
+        const old = oldUsersMap.get(u.userId);
+        return {
+          ...u,
+          starred: old?.starred || false,
+          lastTweetTime: u.lastTweetTime || old?.lastTweetTime || null,
+        };
+      });
+      await chrome.storage.local.set({
+        dashboard_cache: { users: mergedUsers, cachedAt: Date.now(), version: 1 },
+      });
+      console.log(`[X-NF] Dashboard cache updated: ${mergedUsers.length} users`);
+    }
+  } catch (err) {
+    console.warn('[X-NF] Failed to update dashboard cache:', err);
+  }
+
   // Step 6: Send complete result to content script
   await messageHub.sendComplete(tabId, {
     nonFollowers: result.nonFollowers,
