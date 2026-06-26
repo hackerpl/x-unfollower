@@ -149,10 +149,10 @@ export class DashboardRenderer {
     tabsDiv.className = 'dashboard-tabs';
 
     const tabs: Array<{ id: 'all' | 'starred' | 'quality' | 'growing'; label: string; count: number }> = [
-      { id: 'all', label: '全部', count: options.counts.all },
-      { id: 'starred', label: '★ 星标', count: options.counts.starred },
-      { id: 'quality', label: '🔥 高质', count: options.counts.quality },
-      { id: 'growing', label: '🌱 成长', count: options.counts.growing },
+      { id: 'all', label: this.i18n.tabAll, count: options.counts.all },
+      { id: 'starred', label: this.i18n.tabStarred, count: options.counts.starred },
+      { id: 'quality', label: this.i18n.tabQuality, count: options.counts.quality },
+      { id: 'growing', label: this.i18n.tabGrowing, count: options.counts.growing },
     ];
 
     for (const tab of tabs) {
@@ -270,7 +270,7 @@ export class DashboardRenderer {
     // Table header
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    const headers = ['★', '', '@', 'Name', 'Bio', 'Following', 'Followers', 'Last Tweet', 'Action'];
+    const headers = ['★', '', '@', this.i18n.headerName, this.i18n.headerBio, this.i18n.headerFollowing, this.i18n.headerFollowers, this.i18n.headerLastTweet, this.i18n.headerAction];
     for (const text of headers) {
       const th = document.createElement('th');
       th.textContent = text;
@@ -557,7 +557,7 @@ export class DashboardRenderer {
     const starBtn = document.createElement('button');
     starBtn.className = user.starred ? 'star-btn active' : 'star-btn';
     starBtn.textContent = user.starred ? '★' : '☆';
-    starBtn.title = user.starred ? 'Remove star' : 'Add star';
+    starBtn.title = user.starred ? this.i18n.starRemove : this.i18n.starAdd;
     starBtn.addEventListener('click', () => {
       this.callbacks?.onToggleStar?.(user.userId);
     });
@@ -639,7 +639,7 @@ export class DashboardRenderer {
       const refreshTimeBtn = document.createElement('button');
       refreshTimeBtn.className = 'refresh-time-btn';
       refreshTimeBtn.textContent = '↻';
-      refreshTimeBtn.title = 'Fetch last tweet time';
+      refreshTimeBtn.title = this.i18n.refreshTweetTime;
       refreshTimeBtn.addEventListener('click', () => {
         if (!this.callbacks?.onRefreshTweet) return;
         refreshTimeBtn.disabled = true;
@@ -812,13 +812,13 @@ export class DashboardRenderer {
       if (diffDays > 30) {
         return date.toLocaleDateString();
       } else if (diffDays > 0) {
-        return `${diffDays}d ago`;
+        return this.i18n.timeDaysAgo(diffDays);
       } else if (diffHours > 0) {
-        return `${diffHours}h ago`;
+        return this.i18n.timeHoursAgo(diffHours);
       } else if (diffMinutes > 0) {
-        return `${diffMinutes}m ago`;
+        return this.i18n.timeMinutesAgo(diffMinutes);
       } else {
-        return 'just now';
+        return this.i18n.timeJustNow;
       }
     } catch {
       return isoTime;
@@ -1420,7 +1420,7 @@ export class DashboardRenderer {
       .dashboard-hint {
         padding: 6px 16px;
         font-size: 11px;
-        color: rgba(120, 0, 255, 0.5);
+        color: #ff003c;
         text-align: center;
         letter-spacing: 0.3px;
       }

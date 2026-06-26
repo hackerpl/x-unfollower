@@ -52,9 +52,9 @@ async function init(): Promise<void> {
   if (!userId) {
     // No userId found: show login prompt
     root.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:center;height:80vh;flex-direction:column;color:#e7e9ea;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+      <div style="display:flex;align-items:center;justify-content:center;height:80vh;flex-direction:column;color:#00ffd5;font-family:'JetBrains Mono',monospace;">
         <p style="font-size:18px;margin-bottom:12px;">${strings.authExpired}</p>
-        <p style="font-size:14px;color:#71767b;">Please log in to X (twitter.com) first, then reopen this page.</p>
+        <p style="font-size:14px;color:rgba(0,255,213,0.5);">${strings.loginPrompt}</p>
       </div>
     `;
     return;

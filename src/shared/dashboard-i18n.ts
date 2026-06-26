@@ -31,6 +31,30 @@ export interface DashboardI18nStrings {
   unfollowSuccess: string;
   unfollowFailed: string;
   loadingData: string;
+  // Table headers
+  headerName: string;
+  headerBio: string;
+  headerFollowing: string;
+  headerFollowers: string;
+  headerLastTweet: string;
+  headerAction: string;
+  // Relative time
+  timeJustNow: string;
+  timeMinutesAgo: (n: number) => string;
+  timeHoursAgo: (n: number) => string;
+  timeDaysAgo: (n: number) => string;
+  // Tabs
+  tabAll: string;
+  tabStarred: string;
+  tabQuality: string;
+  tabGrowing: string;
+  // Misc UI
+  hintCacheInfo: string;
+  noDataMessage: string;
+  loginPrompt: string;
+  starAdd: string;
+  starRemove: string;
+  refreshTweetTime: string;
 }
 
 const zhCN: DashboardI18nStrings = {
@@ -59,6 +83,26 @@ const zhCN: DashboardI18nStrings = {
   unfollowSuccess: '已取消关注',
   unfollowFailed: '取消关注失败',
   loadingData: '正在加载数据...',
+  headerName: '昵称',
+  headerBio: '简介',
+  headerFollowing: '关注',
+  headerFollowers: '粉丝',
+  headerLastTweet: '最近发帖',
+  headerAction: '操作',
+  timeJustNow: '刚刚',
+  timeMinutesAgo: (n) => `${n}分钟前`,
+  timeHoursAgo: (n) => `${n}小时前`,
+  timeDaysAgo: (n) => `${n}天前`,
+  tabAll: '全部',
+  tabStarred: '★ 星标',
+  tabQuality: '🔥 高质',
+  tabGrowing: '🌱 成长',
+  hintCacheInfo: '数据状态保存在本地缓存，刷新页面后保留，切换浏览器失效',
+  noDataMessage: '暂无数据，请先访问 X 页面以自动拉取关注列表',
+  loginPrompt: '请先登录 X (twitter.com)，然后重新打开此页面',
+  starAdd: '添加星标',
+  starRemove: '取消星标',
+  refreshTweetTime: '获取最近发帖时间',
 };
 
 const zhTW: DashboardI18nStrings = {
@@ -87,6 +131,26 @@ const zhTW: DashboardI18nStrings = {
   unfollowSuccess: '已取消跟隨',
   unfollowFailed: '取消跟隨失敗',
   loadingData: '正在載入資料...',
+  headerName: '暱稱',
+  headerBio: '簡介',
+  headerFollowing: '關注',
+  headerFollowers: '粉絲',
+  headerLastTweet: '最近發文',
+  headerAction: '操作',
+  timeJustNow: '剛剛',
+  timeMinutesAgo: (n) => `${n}分鐘前`,
+  timeHoursAgo: (n) => `${n}小時前`,
+  timeDaysAgo: (n) => `${n}天前`,
+  tabAll: '全部',
+  tabStarred: '★ 星標',
+  tabQuality: '🔥 高質',
+  tabGrowing: '🌱 成長',
+  hintCacheInfo: '資料狀態保存在本地快取，重新整理頁面後保留，切換瀏覽器失效',
+  noDataMessage: '暫無資料，請先造訪 X 頁面以自動拉取關注清單',
+  loginPrompt: '請先登入 X (twitter.com)，然後重新開啟此頁面',
+  starAdd: '加入星標',
+  starRemove: '取消星標',
+  refreshTweetTime: '取得最近發文時間',
 };
 
 const en: DashboardI18nStrings = {
@@ -115,6 +179,26 @@ const en: DashboardI18nStrings = {
   unfollowSuccess: 'Unfollowed successfully',
   unfollowFailed: 'Failed to unfollow',
   loadingData: 'Loading data...',
+  headerName: 'Name',
+  headerBio: 'Bio',
+  headerFollowing: 'Following',
+  headerFollowers: 'Followers',
+  headerLastTweet: 'Last Tweet',
+  headerAction: 'Action',
+  timeJustNow: 'just now',
+  timeMinutesAgo: (n) => `${n}m ago`,
+  timeHoursAgo: (n) => `${n}h ago`,
+  timeDaysAgo: (n) => `${n}d ago`,
+  tabAll: 'All',
+  tabStarred: '★ Starred',
+  tabQuality: '🔥 Quality',
+  tabGrowing: '🌱 Growing',
+  hintCacheInfo: 'Data is cached locally. Persists on page refresh, lost when switching browsers.',
+  noDataMessage: 'No data yet. Please visit X page first to auto-fetch your following list.',
+  loginPrompt: 'Please log in to X (twitter.com) first, then reopen this page.',
+  starAdd: 'Add star',
+  starRemove: 'Remove star',
+  refreshTweetTime: 'Fetch last tweet time',
 };
 
 const dashboardLocales: Record<Locale, DashboardI18nStrings> = {

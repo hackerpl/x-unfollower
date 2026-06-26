@@ -92,7 +92,7 @@ export class DashboardManager {
     });
 
     // Render cache hint text
-    this.renderer.renderHint('数据状态保存在本地缓存，刷新页面后保留，切换浏览器失效');
+    this.renderer.renderHint(this.i18n.hintCacheInfo);
 
     // Load cache
     const cache = await this.store.load();
@@ -117,7 +117,7 @@ export class DashboardManager {
       this.state.isLoading = false;
       this.renderer.hideLoading();
       this.renderer.renderError(
-        { errorType: 'unknown', message: '暂无数据，请先访问 X 页面以自动拉取关注列表' },
+        { errorType: 'unknown', message: this.i18n.noDataMessage },
         {}
       );
     }
