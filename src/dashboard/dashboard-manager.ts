@@ -89,15 +89,14 @@ export class DashboardManager {
     const cache = await this.store.load();
 
     if (cache) {
-      // Cache exists: render cached data immediately, then trigger incremental update
+      // Cache exists: render cached data directly (including saved last tweet times)
       this.state.users = cache.users;
       this.state.lastUpdatedAt = cache.cachedAt;
       this.state.isLoading = false;
       this.applyFilterAndSort();
       this.renderer.hideLoading();
       this.renderer.renderUserList(this.state.filteredUsers);
-      this.triggerIncrementalUpdate();
-      // Start auto-refresh for missing tweet times from cache
+      // Auto-refresh last tweet times for users that don't have one yet
       this.startAutoRefreshTweetTimes();
     } else {
       // No cache: trigger full fetch
