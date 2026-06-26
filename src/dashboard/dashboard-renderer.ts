@@ -1082,7 +1082,11 @@ export class DashboardRenderer {
         gap: 4px;
         padding: 12px 8px;
         border-bottom: 1px solid rgba(0, 255, 213, 0.1);
-        background-color: rgba(10, 10, 15, 0.6);
+        background-color: rgba(10, 10, 15, 0.95);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        backdrop-filter: blur(8px);
       }
 
       .dashboard-tab {
@@ -1130,7 +1134,11 @@ export class DashboardRenderer {
         gap: 12px;
         padding: 12px 8px;
         border-bottom: 1px solid rgba(0, 255, 213, 0.08);
-        background-color: rgba(10, 10, 15, 0.4);
+        background-color: rgba(10, 10, 15, 0.95);
+        position: sticky;
+        top: 52px;
+        z-index: 99;
+        backdrop-filter: blur(8px);
       }
 
       .dashboard-sort-controls {
